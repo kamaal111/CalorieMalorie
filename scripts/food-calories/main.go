@@ -3,11 +3,34 @@ package main
 import (
 	"encoding/json"
 	"encoding/xml"
+	"errors"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 )
+
+func main()  {
+	startTimer := time.Now()
+
+	output := initializingFlag("where to store data", "", "p", "path")
+
+	if len(strings.TrimSpace(output)) < 1 {
+		// TODO: Show help
+		panic(errors.New("Please provide a valid path"))
+	}
+
+	err := parseFoodDisplayTableToJSONFile(output)
+	if err != nil {
+		panic(err.Error())
+	} 
+
+	timeElapsed := time.Since(startTimer)
+	fmt.Printf("converted in %s ✨\n", timeElapsed)
+}
 
 // FoodDisplayTable ...
 type FoodDisplayTable struct {
@@ -46,17 +69,47 @@ type FoodDisplayRow struct {
 	SaturatedFats float32 `xml:"Saturated_Fats" json:"saturated_fats"`
 }
 
-func main()  {
-	startTimer := time.Now()
-	xmlFile, err := os.Open("DataSet/myfoodapediadata/Food_Display_Table.xml")
+func initializingFlag(usage string, defaultValue string, flagShort string, flagLong string) string {
+	var value string
+	flag.StringVar(&value, flagShort, defaultValue, usage)
+	flag.StringVar(&value, flagLong, defaultValue, usage)
+	flag.Parse()
+	return value
+}
+
+func xmlFileToBytes(xmlPath string) ([]byte, error) {
+	xmlFile, err := os.Open(xmlPath)
 	if err != nil {
-        panic(err.Error())
+		return nil, err
     }
 	defer xmlFile.Close()
+	return ioutil.ReadAll(xmlFile)
+}
 
-	byteValue, err := ioutil.ReadAll(xmlFile)
+func createFileFromJSONBytes(jsonBytes []byte, path string) error {
+	createdFile, err := os.Create(path)
 	if err != nil {
-        panic(err.Error())
+		return err
+	}
+
+	_, err = createdFile.Write(jsonBytes)
+	if err != nil {
+		return err
+	}
+
+	err = createdFile.Close()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func parseFoodDisplayTableToJSONFile(destinationPath string) error {
+	absPath, _ := filepath.Abs("scripts/food-calories/myfoodapediadata/Food_Display_Table.xml")
+	byteValue, err := xmlFileToBytes(absPath)
+	if err != nil {
+        return err
     }
 
 	var foodDisplayTable FoodDisplayTable
@@ -64,24 +117,13 @@ func main()  {
 
 	jsonBytes, err := json.MarshalIndent(foodDisplayTable.FoodDisplayRow, "", "  ")
 	if err != nil {
-		panic(err.Error())
+		return err
 	}
 
-	createdFile, err := os.Create("some.json")
+	err = createFileFromJSONBytes(jsonBytes, destinationPath + "/some.json")
 	if err != nil {
-		panic(err.Error())
+		return err
 	}
 
-	_, err = createdFile.Write(jsonBytes)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	err = createdFile.Close()
-	if err != nil {
-		panic(err.Error())
-	}
-
-	timeElapsed := time.Since(startTimer)
-	fmt.Printf("converted in %s ✨\n", timeElapsed)
+	return nil
 }
